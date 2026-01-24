@@ -6,7 +6,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import * as THREE from "three"
 import { Button } from "@/components/ui/button"
-import { Sun, Moon } from "lucide-react"
+import { Sun, Moon, ChevronDown, ChevronUp } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -17,7 +17,15 @@ type EmbeddingPoint = {
   y: number
   z: number
   cluster?: number
+  topic_name?: string
   metadata?: Record<string, unknown>
+}
+
+type TopicInfo = {
+  id: number
+  name: string
+  keywords: string[]
+  count: number
 }
 
 type CollectionInfo = {
@@ -25,9 +33,10 @@ type CollectionInfo = {
   count: number
   dimensions: number
   model: string
+  topics?: TopicInfo[]
 }
 
-// Color palette for clusters (20 distinct colors)
+// Color palette for clusters (40 distinct colors)
 const CLUSTER_PALETTE = [
   [0.89, 0.10, 0.11], // red
   [0.22, 0.49, 0.72], // blue
@@ -49,6 +58,27 @@ const CLUSTER_PALETTE = [
   [0.36, 0.36, 0.36], // dark gray
   [0.55, 0.71, 0.00], // lime
   [0.75, 0.00, 0.00], // dark red
+  // Additional colors for more topics
+  [0.00, 0.50, 0.50], // dark cyan
+  [0.80, 0.40, 0.00], // burnt orange
+  [0.50, 0.00, 0.50], // dark purple
+  [0.00, 0.60, 0.30], // forest green
+  [0.70, 0.70, 0.00], // dark yellow
+  [0.60, 0.20, 0.40], // plum
+  [0.20, 0.60, 0.60], // sea green
+  [0.90, 0.30, 0.30], // coral
+  [0.30, 0.30, 0.70], // slate blue
+  [0.50, 0.70, 0.30], // yellow green
+  [0.80, 0.20, 0.60], // rose
+  [0.40, 0.50, 0.60], // steel blue
+  [0.70, 0.50, 0.30], // tan
+  [0.20, 0.40, 0.20], // dark green
+  [0.60, 0.40, 0.60], // lavender
+  [0.80, 0.60, 0.40], // sandy
+  [0.30, 0.50, 0.80], // cornflower
+  [0.70, 0.30, 0.50], // berry
+  [0.40, 0.70, 0.50], // mint
+  [0.90, 0.40, 0.10], // pumpkin
 ]
 
 const CLUSTER_HEX = CLUSTER_PALETTE.map(c => 
@@ -133,7 +163,7 @@ function InstancedPoints({
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, pointCount]}>
-      <sphereGeometry args={[0.04, 12, 12]}>
+      <sphereGeometry args={[0.06, 12, 12]}>
         <instancedBufferAttribute
           attach="attributes-color"
           args={[colorArray, 3]}
@@ -182,6 +212,7 @@ export default function EmbeddingsVisualizer() {
   
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{x: number, y: number} | null>(null)
+  const [legendExpanded, setLegendExpanded] = useState(false)
 
   useEffect(() => {
     loadCollectionInfo()
@@ -291,7 +322,49 @@ export default function EmbeddingsVisualizer() {
               <span className={`font-mono ${darkMode ? 'text-white' : 'text-slate-700'}`}>Protext</span>
             </div>
           </div>
+          
+          {/* Topic legend toggle */}
+          {collectionInfo?.topics && collectionInfo.topics.length > 0 && (
+            <button
+              onClick={() => setLegendExpanded(!legendExpanded)}
+              className={`w-full mt-3 pt-2 border-t flex items-center justify-between ${
+                darkMode ? 'border-zinc-700 text-zinc-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="font-medium">Témata ({collectionInfo.topics.length})</span>
+              {legendExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
         </div>
+        
+        {/* Topic legend - expanded */}
+        {legendExpanded && collectionInfo?.topics && (
+          <div 
+            className={`absolute top-[180px] left-4 z-30 ${darkMode ? 'bg-zinc-900/90' : 'bg-white/95 border border-slate-200'} backdrop-blur rounded-lg shadow-lg p-3 text-xs max-h-[60vh] overflow-y-auto`}
+            style={{ minWidth: '200px', maxWidth: '280px' }}
+          >
+            <div className="space-y-1.5">
+              {collectionInfo.topics.map((topic) => (
+                <div key={topic.id} className="flex items-start gap-2">
+                  <div
+                    className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5"
+                    style={{ 
+                      backgroundColor: CLUSTER_HEX[topic.id === -1 ? 8 : Math.abs(topic.id) % CLUSTER_HEX.length] 
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-medium truncate ${darkMode ? 'text-white' : 'text-slate-700'}`}>
+                      {topic.name}
+                    </div>
+                    <div className={`text-[10px] ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                      {topic.count.toLocaleString()} dokumentů
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Theme toggle - top right */}
         <Button
@@ -315,7 +388,7 @@ export default function EmbeddingsVisualizer() {
               borderColor: CLUSTER_HEX[Math.abs(hoveredPoint.cluster ?? 0) % CLUSTER_HEX.length],
             }}
           >
-            {/* Header with cluster and category */}
+            {/* Header with topic and category */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span 
                 className="px-2 py-0.5 rounded text-xs font-bold text-white"
@@ -323,7 +396,7 @@ export default function EmbeddingsVisualizer() {
                   backgroundColor: CLUSTER_HEX[Math.abs(hoveredPoint.cluster ?? 0) % CLUSTER_HEX.length] 
                 }}
               >
-                Cluster {hoveredPoint.cluster}
+                {hoveredPoint.topic_name || `Cluster ${hoveredPoint.cluster}`}
               </span>
               {hoveredPoint.metadata?.category && (
                 <span className={`text-xs px-2 py-0.5 rounded ${darkMode ? 'bg-zinc-700 text-zinc-300' : 'bg-slate-200 text-slate-600'}`}>
@@ -341,7 +414,7 @@ export default function EmbeddingsVisualizer() {
             
             {/* Text content */}
             <div className={`text-xs line-clamp-3 ${darkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-              {hoveredPoint.text || "(žádný text)"}
+              {hoveredPoint.text?.replace(/^[.\s]+/, '') || "(žádný text)"}
             </div>
             
             {/* Footer with ID and position */}

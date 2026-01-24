@@ -26,6 +26,15 @@ except ImportError:
     HAS_HDBSCAN = False
     print("HDBSCAN not installed, skipping clustering")
 
+try:
+    from bertopic import BERTopic
+    from bertopic.representation import KeyBERTInspired
+    from sklearn.feature_extraction.text import CountVectorizer
+    HAS_BERTOPIC = True
+except ImportError:
+    HAS_BERTOPIC = False
+    print("BERTopic not installed, skipping topic modeling")
+
 CHROMA_DB_PATH = Path(__file__).parent.parent / "chroma_db_PROTEXT"
 SQLITE_PATH = CHROMA_DB_PATH / "chroma.sqlite3"
 CACHE_FILE = Path(__file__).parent / "embeddings_cache.json"
@@ -92,28 +101,43 @@ def read_all_embeddings(dimensions=1024):
         raise Exception("No HNSW index found")
     
     data_file = collection_folders[0] / "data_level0.bin"
+    header_file = collection_folders[0] / "header.bin"
     
     print(f"Reading embeddings from {data_file}...")
+    
+    # Read header to get parameters
+    with open(header_file, "rb") as f:
+        header = f.read()
+    
+    import struct
+    num_vectors = struct.unpack('<I', header[20:24])[0]
+    # NOTE: entry_size is at offset 28, NOT 36!
+    entry_size = struct.unpack('<I', header[28:32])[0]
+    vector_offset_in_entry = struct.unpack('<I', header[44:48])[0]
+    
+    print(f"   Header: {num_vectors} vectors, entry_size={entry_size}, vector_offset={vector_offset_in_entry}")
     
     with open(data_file, "rb") as f:
         data = f.read()
     
-    M = 32  # max_neighbors (from header.bin)
-    entry_size = 4236  # From header.bin - includes 8 bytes padding after vector
-    
-    num_vectors = len(data) // entry_size
-    print(f"   Found {num_vectors} vectors in binary file")
+    # Data starts at offset 0 (no file header)
+    file_size = len(data)
     
     # Read all embeddings indexed by their position (label)
+    # Labels start at 1, but position in file starts at 0
+    # So label N is at position N-1
     embeddings = {}
-    for label in range(num_vectors):
+    max_pos = file_size // entry_size
+    print(f"   File contains {max_pos} vector slots")
+    
+    for label in range(1, num_vectors + 1):
         if label % 100000 == 0:
-            print(f"  Reading {label}/{num_vectors}...")
-        offset = label * entry_size
-        vector_offset = offset + 4 + M * 4
-        if vector_offset + dimensions * 4 <= len(data):
+            print(f"  Reading label {label}/{num_vectors}...")
+        position = label - 1  # Labels start at 1, positions at 0
+        offset = position * entry_size + vector_offset_in_entry
+        if offset + dimensions * 4 <= file_size:
             embeddings[label] = np.frombuffer(
-                data[vector_offset:vector_offset + dimensions * 4], 
+                data[offset:offset + dimensions * 4], 
                 dtype=np.float32
             ).copy()
     
@@ -162,54 +186,148 @@ def main():
     embeddings = np.array(embeddings_list, dtype=np.float32)
     actual_count = len(docs)
     
-    # Normalize embeddings (important for UMAP with cosine metric)
-    print("\n5. Normalizing embeddings...")
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    norms[norms == 0] = 1  # Avoid division by zero
-    embeddings = embeddings / norms
+    # We'll use TF-IDF for BOTH visualization AND clustering
+    # This ensures documents with same topic are close in 3D space
+    cluster_labels = np.zeros(actual_count, dtype=int)
+    topic_info = {}  # topic_id -> {name, keywords}
+    coords_3d = None
     
-    # UMAP directly on full embeddings (no PCA - preserves cosine similarity)
-    if HAS_UMAP:
-        print("\n6. Computing UMAP reduction to 3D (no PCA)...")
-        print("   Using full 1024-dim embeddings with cosine metric")
-        print("   - n_neighbors=15 (preserve local similarity)")
-        print("   - min_dist=0.1 (slight separation)")
+    if HAS_BERTOPIC:
+        print("\n5. Running TF-IDF based visualization and clustering...")
+        print("   Using SPARSE vectors (keyword-based) for BOTH:")
+        print("   - 3D positions (topics will be spatially grouped)")
+        print("   - Cluster assignments (by shared keywords)")
         
-        reducer = UMAP(
-            n_components=3,       # 3D for exploration
-            n_neighbors=15,       # Preserve local structure
-            min_dist=0.1,         # Slight separation
-            spread=1.0,           # Natural spread
-            metric='cosine',      # Matches embedding similarity
-            init='spectral',      # Preserves global structure
-            random_state=42,      # Reproducibility
-            low_memory=True,
+        # Get document texts
+        doc_texts = [doc["text"] for doc in docs]
+        
+        # TF-IDF Vectorizer for sparse representation
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        
+        tfidf_vectorizer = TfidfVectorizer(
+            strip_accents=None,     # Preserve Czech diacritics
+            token_pattern=r'(?u)\b[^\W\d_]{2,}\b',  # Unicode letters only
+            lowercase=True,
+            min_df=5,
+            max_df=0.5,
+            ngram_range=(1, 2),
+            max_features=5000  # Limit vocabulary for speed
+        )
+        
+        print("   Creating TF-IDF matrix...")
+        tfidf_matrix = tfidf_vectorizer.fit_transform(doc_texts)
+        print(f"   TF-IDF matrix: {tfidf_matrix.shape}")
+        
+        # Convert sparse to dense for UMAP (required)
+        tfidf_dense = tfidf_matrix.toarray()
+        
+        # UMAP to 3D for visualization (on TF-IDF, not dense embeddings!)
+        print("\n6. Reducing TF-IDF to 3D for visualization...")
+        umap_3d = UMAP(
+            n_components=3,
+            n_neighbors=15,
+            min_dist=0.1,
+            spread=1.0,
+            metric='cosine',
+            random_state=42,
             verbose=True
         )
-        coords_3d = reducer.fit_transform(embeddings)  # Full embeddings, no PCA
-    else:
-        print("\n6. Computing PCA reduction to 3D (UMAP not available)...")
-        pca3 = PCA(n_components=3, random_state=42)
-        coords_3d = pca3.fit_transform(embeddings)
-    
-    # Scale coordinates preserving natural density (single scale factor)
-    print("\n7. Scaling coordinates (preserving natural density)...")
-    # Center at origin
-    coords_3d = coords_3d - coords_3d.mean(axis=0)
-    # Scale so max distance from center is ~3 (good for viewing)
-    max_dist = np.max(np.linalg.norm(coords_3d, axis=1))
-    if max_dist > 0:
-        coords_3d = coords_3d * (3.0 / max_dist)
-    
-    # Clustering for colors
-    cluster_labels = np.zeros(actual_count, dtype=int)
-    if HAS_HDBSCAN:
-        print("\n8. Computing HDBSCAN clusters for coloring...")
+        coords_3d = umap_3d.fit_transform(tfidf_dense)
+        
+        # Scale coordinates
+        print("\n7. Scaling coordinates...")
+        coords_3d = coords_3d - coords_3d.mean(axis=0)
+        max_dist = np.max(np.linalg.norm(coords_3d, axis=1))
+        if max_dist > 0:
+            coords_3d = coords_3d * (3.0 / max_dist)
+        
+        # UMAP to 5D for clustering
+        print("\n8. Reducing TF-IDF to 5D for clustering...")
+        umap_5d = UMAP(
+            n_components=5,
+            n_neighbors=15,
+            min_dist=0.0,
+            metric='cosine',
+            random_state=42,
+            verbose=False
+        )
+        tfidf_reduced = umap_5d.fit_transform(tfidf_dense)
+        
+        # Use BERTopic with our TF-IDF vectors
+        vectorizer = CountVectorizer(
+            strip_accents=None,
+            token_pattern=r'(?u)\b[^\W\d_]{3,}\b',  # Min 3 chars
+            lowercase=True,
+            min_df=2,              # Low to avoid vectorizer error
+            max_df=1.0,            # Don't filter by max frequency
+            ngram_range=(1, 1)     # Single words only
+        )
+        
+        # HDBSCAN - moderate settings for ~20-30 topics
+        hdbscan_for_bertopic = hdbscan.HDBSCAN(
+            min_cluster_size=80,    # ~80 docs per cluster minimum
+            min_samples=5,
+            cluster_selection_epsilon=0.0,
+            cluster_selection_method='eom',
+            prediction_data=True
+        )
+        
+        # UMAP for BERTopic
+        umap_for_bertopic = UMAP(
+            n_components=5,
+            n_neighbors=15,
+            min_dist=0.0,
+            metric='cosine',
+            random_state=42
+        )
+        
+        topic_model = BERTopic(
+            language="multilingual",
+            embedding_model=None,
+            umap_model=umap_for_bertopic,
+            hdbscan_model=hdbscan_for_bertopic,
+            vectorizer_model=vectorizer,
+            top_n_words=5,
+            calculate_probabilities=False,
+            verbose=True
+        )
+        
+        # Fit with TF-IDF dense vectors
+        topics, _ = topic_model.fit_transform(doc_texts, embeddings=tfidf_dense)
+        cluster_labels = np.array(topics)
+        
+        # Get topic info
+        topic_df = topic_model.get_topic_info()
+        n_clusters = len(topic_df) - 1  # -1 for outlier topic
+        print(f"   Found {n_clusters} topics")
+        
+        # Build topic info dict
+        for _, row in topic_df.iterrows():
+            topic_id = row["Topic"]
+            if topic_id == -1:
+                topic_info[-1] = {"name": "Nezařazeno", "keywords": []}
+            else:
+                # Get top keywords for this topic
+                topic_words = topic_model.get_topic(topic_id)
+                if topic_words:
+                    keywords = [word for word, _ in topic_words[:5]]
+                    # Use just the top keyword as the topic name
+                    name = keywords[0].title() if keywords else f"Topic {topic_id}"
+                    topic_info[topic_id] = {"name": name, "keywords": keywords}
+        
+        print(f"\n   Topic summary:")
+        for tid, info in sorted(topic_info.items())[:10]:
+            print(f"   Topic {tid}: {info['name']}")
+        if len(topic_info) > 10:
+            print(f"   ... and {len(topic_info) - 10} more topics")
+            
+    elif HAS_HDBSCAN:
+        print("\n8. Computing HDBSCAN clusters for coloring (no BERTopic)...")
         clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=50,           # Smaller = more clusters
-            min_samples=5,                 # Smaller = more clusters
-            cluster_selection_epsilon=0.0, # No epsilon limit
-            cluster_selection_method='leaf'  # More granular clusters
+            min_cluster_size=100,
+            min_samples=5,
+            cluster_selection_epsilon=0.1,
+            cluster_selection_method='eom'
         )
         cluster_labels = clusterer.fit_predict(coords_3d)
         n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
@@ -221,7 +339,8 @@ def main():
         "count": actual_count,
         "dimensions": 1024,
         "model": "BAAI/bge-m3",
-        "method": "UMAP" if HAS_UMAP else "PCA",
+        "method": "TF-IDF + UMAP + BERTopic" if HAS_BERTOPIC else ("UMAP" if HAS_UMAP else "PCA"),
+        "topics": topic_info,  # Topic ID -> {name, keywords}
         "points": []
     }
     
@@ -229,12 +348,15 @@ def main():
         if i % 50000 == 0:
             print(f"   Processing {i}/{actual_count}...")
         doc = docs[i]
+        topic_id = int(cluster_labels[i])
+        topic_name = topic_info.get(topic_id, {}).get("name", f"Topic {topic_id}")
         cache["points"].append({
             "id": doc["id"],
             "text": doc["text"],
             "title": doc["title"],
             "category": doc.get("category", ""),
-            "cluster": int(cluster_labels[i]),
+            "cluster": topic_id,
+            "topic_name": topic_name,
             "x": float(coords_3d[i, 0]),
             "y": float(coords_3d[i, 1]),
             "z": float(coords_3d[i, 2])

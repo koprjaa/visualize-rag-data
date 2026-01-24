@@ -46,7 +46,15 @@ class EmbeddingPoint(BaseModel):
     y: float
     z: float
     cluster: int = 0
+    topic_name: str = ""
     metadata: dict | None = None
+
+
+class TopicInfo(BaseModel):
+    id: int
+    name: str
+    keywords: list[str]
+    count: int = 0
 
 
 class CollectionInfo(BaseModel):
@@ -54,6 +62,7 @@ class CollectionInfo(BaseModel):
     count: int
     dimensions: int
     model: str
+    topics: list[TopicInfo] = []
 
 
 @app.get("/api/info")
@@ -63,7 +72,6 @@ async def get_info() -> CollectionInfo:
     
     # Also read from meta file for total count
     meta_path = CHROMA_DB_PATH / "embedding_meta.json"
-    total_count = cache.get("count", 0)
     model = cache.get("model", "unknown")
     dimensions = cache.get("dimensions", 1024)
     
@@ -73,11 +81,35 @@ async def get_info() -> CollectionInfo:
             model = meta.get("model_name", model)
             dimensions = meta.get("dimensions", dimensions)
     
+    # Build topics list with counts
+    topics_raw = cache.get("topics", {})
+    points = cache.get("points", [])
+    
+    # Count documents per topic
+    topic_counts = {}
+    for p in points:
+        tid = p.get("cluster", 0)
+        topic_counts[tid] = topic_counts.get(tid, 0) + 1
+    
+    topics = []
+    for tid_str, info in topics_raw.items():
+        tid = int(tid_str)
+        topics.append(TopicInfo(
+            id=tid,
+            name=info.get("name", f"Topic {tid}"),
+            keywords=info.get("keywords", []),
+            count=topic_counts.get(tid, 0)
+        ))
+    
+    # Sort by count descending, but put -1 (outliers) last
+    topics.sort(key=lambda t: (t.id == -1, -t.count))
+    
     return CollectionInfo(
         name="langchain",
-        count=len(cache.get("points", [])),
+        count=len(points),
         dimensions=dimensions,
-        model=model
+        model=model,
+        topics=topics
     )
 
 
@@ -104,6 +136,7 @@ async def get_embeddings(
             y=p["y"],
             z=p["z"],
             cluster=p.get("cluster", 0),
+            topic_name=p.get("topic_name", ""),
             metadata={
                 "title": p.get("title", ""),
                 "category": p.get("category", "")
