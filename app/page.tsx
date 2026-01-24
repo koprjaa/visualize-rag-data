@@ -88,14 +88,21 @@ const CLUSTER_HEX = CLUSTER_PALETTE.map(c =>
 // Instanced points with hover detection
 function InstancedPoints({ 
   points, 
-  onHover 
+  onHover,
+  selectedTopic
 }: { 
   points: EmbeddingPoint[]
   onHover: (index: number | null, position: {x: number, y: number} | null) => void
+  selectedTopic: number | null
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const { camera, raycaster, pointer, gl } = useThree()
   const lastHovered = useRef<number | null>(null)
+  
+  // Configure raycaster for small objects
+  useEffect(() => {
+    raycaster.params.Line = { threshold: 0.1 }
+  }, [raycaster])
   
   // Don't render if no points
   const pointCount = points.length || 1
@@ -107,12 +114,17 @@ function InstancedPoints({
       const cluster = points[i].cluster ?? 0
       const colorIdx = cluster === -1 ? 8 : Math.abs(cluster) % CLUSTER_PALETTE.length
       const color = CLUSTER_PALETTE[colorIdx]
-      colors[i * 3] = color[0]
-      colors[i * 3 + 1] = color[1]
-      colors[i * 3 + 2] = color[2]
+      
+      // If a topic is selected, dim non-matching points
+      const isSelected = selectedTopic === null || cluster === selectedTopic
+      const dimFactor = isSelected ? 1.0 : 0.15
+      
+      colors[i * 3] = color[0] * dimFactor
+      colors[i * 3 + 1] = color[1] * dimFactor
+      colors[i * 3 + 2] = color[2] * dimFactor
     }
     return colors
-  }, [points])
+  }, [points, selectedTopic])
 
   useEffect(() => {
     if (!meshRef.current || points.length === 0) return
@@ -129,6 +141,19 @@ function InstancedPoints({
     
     mesh.instanceMatrix.needsUpdate = true
   }, [points])
+
+  // Update colors when selection changes
+  useEffect(() => {
+    if (!meshRef.current || points.length === 0) return
+    const geometry = meshRef.current.geometry
+    const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute | null
+    if (colorAttr && colorAttr.array.length === colorArray.length) {
+      for (let i = 0; i < colorArray.length; i++) {
+        (colorAttr.array as Float32Array)[i] = colorArray[i]
+      }
+      colorAttr.needsUpdate = true
+    }
+  }, [colorArray, points.length, selectedTopic])
 
   // Raycast on every frame for hover detection
   useFrame(() => {
@@ -163,7 +188,7 @@ function InstancedPoints({
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, pointCount]}>
-      <sphereGeometry args={[0.06, 12, 12]}>
+      <sphereGeometry args={[0.035, 8, 8]}>
         <instancedBufferAttribute
           attach="attributes-color"
           args={[colorArray, 3]}
@@ -177,11 +202,13 @@ function InstancedPoints({
 function Scene({ 
   points,
   onHover,
-  darkMode
+  darkMode,
+  selectedTopic
 }: { 
   points: EmbeddingPoint[]
   onHover: (index: number | null, position: {x: number, y: number} | null) => void
   darkMode: boolean
+  selectedTopic: number | null
 }) {
   return (
     <>
@@ -191,7 +218,7 @@ function Scene({
         args={[6, 30, darkMode ? "#333333" : "#d1d5db", darkMode ? "#222222" : "#e5e7eb"]} 
         rotation={[0, 0, 0]} 
       />
-      <InstancedPoints points={points} onHover={onHover} />
+      <InstancedPoints points={points} onHover={onHover} selectedTopic={selectedTopic} />
       <OrbitControls 
         enableDamping 
         dampingFactor={0.05}
@@ -213,6 +240,16 @@ export default function EmbeddingsVisualizer() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{x: number, y: number} | null>(null)
   const [legendExpanded, setLegendExpanded] = useState(false)
+  const [selectedTopic, setSelectedTopic] = useState<number | null>(null)
+  const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 })
+
+  // Update window size on client
+  useEffect(() => {
+    const updateSize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight })
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => window.removeEventListener('resize', updateSize)
+  }, [])
 
   useEffect(() => {
     loadCollectionInfo()
@@ -294,7 +331,7 @@ export default function EmbeddingsVisualizer() {
           camera={{ position: [5, 4, 5], fov: 50, near: 0.01, far: 1000 }}
           style={{ background: darkMode ? '#09090b' : '#f1f5f9' }}
         >
-          <Scene points={points} onHover={handleHover} darkMode={darkMode} />
+          <Scene points={points} onHover={handleHover} darkMode={darkMode} selectedTopic={selectedTopic} />
         </Canvas>
         
         {/* Info card - top left */}
@@ -322,47 +359,71 @@ export default function EmbeddingsVisualizer() {
               <span className={`font-mono ${darkMode ? 'text-white' : 'text-slate-700'}`}>Protext</span>
             </div>
           </div>
-          
-          {/* Topic legend toggle */}
-          {collectionInfo?.topics && collectionInfo.topics.length > 0 && (
-            <button
-              onClick={() => setLegendExpanded(!legendExpanded)}
-              className={`w-full mt-3 pt-2 border-t flex items-center justify-between ${
-                darkMode ? 'border-zinc-700 text-zinc-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="font-medium">Témata ({collectionInfo.topics.length})</span>
-              {legendExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
         </div>
         
-        {/* Topic legend - expanded */}
-        {legendExpanded && collectionInfo?.topics && (
+        {/* Topic legend - left side, collapsible */}
+        {collectionInfo?.topics && collectionInfo.topics.length > 0 && (
           <div 
-            className={`absolute top-[180px] left-4 z-30 ${darkMode ? 'bg-zinc-900/90' : 'bg-white/95 border border-slate-200'} backdrop-blur rounded-lg shadow-lg p-3 text-xs max-h-[60vh] overflow-y-auto`}
-            style={{ minWidth: '200px', maxWidth: '280px' }}
+            className={`absolute top-[175px] left-4 z-30 ${darkMode ? 'bg-zinc-900/90' : 'bg-white/95 border border-slate-200'} backdrop-blur rounded-lg shadow-lg text-xs`}
+            style={{ minWidth: '180px', maxWidth: '220px' }}
           >
-            <div className="space-y-1.5">
-              {collectionInfo.topics.map((topic) => (
-                <div key={topic.id} className="flex items-start gap-2">
-                  <div
-                    className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5"
-                    style={{ 
-                      backgroundColor: CLUSTER_HEX[topic.id === -1 ? 8 : Math.abs(topic.id) % CLUSTER_HEX.length] 
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-medium truncate ${darkMode ? 'text-white' : 'text-slate-700'}`}>
-                      {topic.name}
-                    </div>
-                    <div className={`text-[10px] ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
-                      {topic.count.toLocaleString()} dokumentů
-                    </div>
-                  </div>
+            {/* Header - always visible */}
+            <button
+              onClick={() => setLegendExpanded(!legendExpanded)}
+              className={`w-full flex items-center justify-between p-3 ${
+                darkMode ? 'text-white hover:bg-zinc-800' : 'text-slate-800 hover:bg-slate-100'
+              } rounded-lg transition-colors`}
+            >
+              <span className="font-semibold">Témata ({collectionInfo.topics.length})</span>
+              {legendExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            
+            {/* Expandable content */}
+            {legendExpanded && (
+              <div className="px-3 pb-3 max-h-[50vh] overflow-y-auto">
+                {/* Show all button */}
+                <button
+                  onClick={() => setSelectedTopic(null)}
+                  className={`w-full mb-2 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                    selectedTopic === null
+                      ? (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                      : (darkMode ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-600')
+                  }`}
+                >
+                  Zobrazit vše
+                </button>
+                
+                <div className="space-y-0.5">
+                  {collectionInfo.topics.map((topic) => {
+                    const isSelected = selectedTopic === topic.id
+                    return (
+                      <button
+                        key={topic.id}
+                        onClick={() => setSelectedTopic(isSelected ? null : topic.id)}
+                        className={`w-full flex items-center gap-2 px-1.5 py-1 rounded transition-colors ${
+                          isSelected 
+                            ? (darkMode ? 'bg-zinc-700' : 'bg-blue-100') 
+                            : (darkMode ? 'hover:bg-zinc-800' : 'hover:bg-slate-100')
+                        }`}
+                      >
+                        <div
+                          className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                          style={{ 
+                            backgroundColor: CLUSTER_HEX[topic.id === -1 ? 8 : Math.abs(topic.id) % CLUSTER_HEX.length] 
+                          }}
+                        />
+                        <div className={`flex-1 truncate text-left ${darkMode ? 'text-white' : 'text-slate-700'}`}>
+                          {topic.name}
+                        </div>
+                        <div className={`text-[10px] ${darkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                          {topic.count}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
         
@@ -383,8 +444,8 @@ export default function EmbeddingsVisualizer() {
               darkMode ? 'bg-zinc-900/95 text-white' : 'bg-white/98 text-slate-900 shadow-2xl'
             }`}
             style={{
-              left: Math.min(tooltipPos.x + 15, window.innerWidth - 380),
-              top: Math.min(tooltipPos.y + 15, window.innerHeight - 280),
+              left: Math.min(tooltipPos.x + 15, windowSize.width - 380),
+              top: Math.min(tooltipPos.y + 15, windowSize.height - 280),
               borderColor: CLUSTER_HEX[Math.abs(hoveredPoint.cluster ?? 0) % CLUSTER_HEX.length],
             }}
           >

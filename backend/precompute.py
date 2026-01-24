@@ -253,14 +253,54 @@ def main():
         )
         tfidf_reduced = umap_5d.fit_transform(tfidf_dense)
         
+        # Czech stopwords - common generic words to exclude from topic names
+        czech_stopwords = [
+            # Pronouns & articles
+            'jsem', 'jsi', 'jsou', 'byl', 'byla', 'bylo', 'byli', 'být', 'bude', 'budou',
+            'mám', 'máme', 'mají', 'může', 'mohou', 'musí', 'chce', 'chtějí',
+            # Common verbs
+            'mít', 'dát', 'jít', 'říci', 'vidět', 'stát', 'dostat', 'chtít', 'vědět',
+            'dělat', 'udělat', 'použít', 'ukázat', 'ukazuje', 'možné', 'ideální',
+            # Prepositions & conjunctions  
+            'přes', 'podle', 'nebo', 'ale', 'tak', 'jen', 'již', 'ještě', 'také',
+            'proto', 'tedy', 'když', 'kde', 'jak', 'proč', 'který', 'která', 'které',
+            # Numbers & quantities
+            'jeden', 'dva', 'tři', 'první', 'druhý', 'třetí', 'celý', 'celém', 'polovina',
+            'více', 'méně', 'hodně', 'málo', 'korun', 'procent', 'tisíc', 'milion',
+            # Generic nouns
+            'rok', 'den', 'čas', 'místo', 'způsob', 'část', 'strana', 'věc', 'člověk',
+            'lidé', 'práce', 'svět', 'život', 'firma', 'společnost', 'funkce',
+            # Web/tech generic
+            'www', 'http', 'https', 'com', 'org', 'cz', 'html',
+            'the', 'and', 'for', 'you', 'are', 'this', 'that', 'our', 'your', 'their',
+            'with', 'have', 'from', 'will', 'can', 'all', 'new', 'more', 'not', 'was',
+            # Other common Czech
+            'právě', 'zatím', 'nyní', 'dnes', 'včera', 'zítra', 'letos', 'příští',
+            'vlastně', 'nejen', 'totiž', 'ovšem', 'pouze', 'hlavně', 'třeba', 'bohužel',
+            'samozřejmě', 'skutečně', 'dokonce', 'nakonec', 'opravdu', 'rozhodně',
+            'prostě', 'zkrátka', 'nicméně', 'přitom', 'dokud', 'jakmile', 'pokud',
+            'pro', 'nad', 'pod', 'před', 'mezi', 'vedle', 'kolem', 'během', 'pomocí',
+            'světě', 'světa', 'věku', 'době', 'rámci', 'případě', 'oblasti', 'základě',
+            # More generic words found in topics
+            'informací', 'informace', 'company', 'rozdíl', 'aby', 'není', 'jsme', 'než',
+            'cílem', 'cíle', 'výši', 'styl', 'mladí', 'mladý', 'republika',
+            'nový', 'nová', 'nové', 'velký', 'velká', 'malý', 'malá', 'dobrý', 'dobrá',
+            'každý', 'každá', 'další', 'jiný', 'jiná', 'stejný', 'stejná', 'různý', 'různá',
+            # Even more generic
+            'kontakt', 'spolu', 'české', 'český', 'česká', 'roce', 'roku', 'let',
+            'bez', 'počet', 'chtěli', 'chtěl', 'naším', 'naše', 'náš', 'meziroční',
+            'dětí', 'petra', 'petr', 'chtěla', 'mohli', 'měli', 'říká', 'uvádí',
+        ]
+        
         # Use BERTopic with our TF-IDF vectors
         vectorizer = CountVectorizer(
             strip_accents=None,
             token_pattern=r'(?u)\b[^\W\d_]{3,}\b',  # Min 3 chars
             lowercase=True,
-            min_df=2,              # Low to avoid vectorizer error
-            max_df=1.0,            # Don't filter by max frequency
-            ngram_range=(1, 1)     # Single words only
+            min_df=2,
+            max_df=1.0,
+            ngram_range=(1, 1),
+            stop_words=czech_stopwords  # Filter generic words
         )
         
         # HDBSCAN - moderate settings for ~20-30 topics
