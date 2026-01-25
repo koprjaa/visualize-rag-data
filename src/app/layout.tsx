@@ -8,8 +8,11 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Embeddings demo",
-  description: "Embeddings representations",
+  title: {
+    default: "ChromaDB Embedding Visualizer",
+    template: "%s · ChromaDB Embedding Visualizer",
+  },
+  description: "Interactive 3D visualization of embeddings from a ChromaDB database.",
   generator: "v0.app",
   icons: {
     icon: [
@@ -22,7 +25,7 @@ export const metadata: Metadata = {
         media: "(prefers-color-scheme: dark)",
       },
       {
-        url: "/icon.svg",
+        url: "/favicon.svg",
         type: "image/svg+xml",
       },
     ],

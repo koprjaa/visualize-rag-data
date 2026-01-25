@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="18" y1="18" x2="110" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="0.55" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 60) rotate(90) scale(58 58)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.2"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#0B0F19"/>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#glow)"/>
+
+  <!-- embedding space axes -->
+  <path d="M36 90 L92 38" stroke="#334155" stroke-width="6" stroke-linecap="round" opacity="0.35"/>
+  <path d="M34 44 L94 84" stroke="#334155" stroke-width="6" stroke-linecap="round" opacity="0.22"/>
+
+  <!-- points -->
+  <circle cx="42" cy="82" r="7" fill="url(#g1)"/>
+  <circle cx="56" cy="66" r="6" fill="url(#g1)"/>
+  <circle cx="74" cy="56" r="7" fill="url(#g1)"/>
+  <circle cx="86" cy="44" r="6" fill="url(#g1)"/>
+  <circle cx="66" cy="86" r="5.5" fill="url(#g1)" opacity="0.9"/>
+
+  <!-- subtle connections -->
+  <path d="M42 82 C50 74 58 70 56 66 C54 62 64 58 74 56 C82 54 84 50 86 44" stroke="url(#g1)" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+  <path d="M56 66 C58 80 60 86 66 86" stroke="url(#g1)" stroke-width="3.5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- crisp highlights -->
+  <g filter="url(#soft)" opacity="0.65">
+    <circle cx="42" cy="82" r="3.2" fill="#FFFFFF"/>
+    <circle cx="74" cy="56" r="3.0" fill="#FFFFFF"/>
+  </g>
+</svg>
