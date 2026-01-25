@@ -278,14 +278,33 @@ export default function EmbeddingsVisualizer() {
     if (!collectionInfo) return
     
     setIsLoading(true)
-    setLoadingStatus(`Načítám ${collectionInfo.count.toLocaleString()} bodů...`)
+    setLoadingStatus(`Načítám 0 / ${collectionInfo.count.toLocaleString()} bodů...`)
     setError(null)
+    setPoints([])
+    setSelectedTopic(null)
     
     try {
-      const response = await fetch(`${API_URL}/api/embeddings?limit=${collectionInfo.count}`)
-      if (!response.ok) throw new Error("Failed to load data")
-      const data = await response.json()
-      setPoints(data)
+      const total = collectionInfo.count
+      const BATCH_SIZE = 50_000
+
+      let offset = 0
+      let loaded = 0
+
+      while (offset < total) {
+        const batchLimit = Math.min(BATCH_SIZE, total - offset)
+        setLoadingStatus(`Načítám ${loaded.toLocaleString()} / ${total.toLocaleString()} bodů...`)
+
+        const response = await fetch(`${API_URL}/api/embeddings?limit=${batchLimit}&offset=${offset}`)
+        if (!response.ok) throw new Error("Failed to load data")
+        const batch = await response.json()
+
+        loaded += Array.isArray(batch) ? batch.length : 0
+        offset += batchLimit
+
+        // Append batch (keeps UI responsive and shows progress)
+        setPoints((prev) => prev.concat(batch))
+      }
+
       setLoadingStatus("")
     } catch {
       setError("Chyba při načítání dat")
@@ -311,7 +330,7 @@ export default function EmbeddingsVisualizer() {
       {/* 3D Canvas */}
       <div className="flex-1 min-h-0 relative">
         {/* Loading overlay */}
-        {(isLoading || points.length === 0) && (
+          {((points.length === 0 && isLoading) || !!error) && (
           <div className={`absolute inset-0 z-40 flex items-center justify-center ${darkMode ? 'bg-zinc-950' : 'bg-gradient-to-br from-slate-100 to-slate-200'}`}>
             <div className="text-center">
               <div className={`animate-spin w-10 h-10 border-3 ${darkMode ? 'border-white' : 'border-slate-600'} border-t-transparent rounded-full mx-auto`} />
@@ -326,6 +345,17 @@ export default function EmbeddingsVisualizer() {
             </div>
           </div>
         )}
+
+          {/* Background loading indicator when streaming batches */}
+          {isLoading && points.length > 0 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
+              <div className={`px-3 py-2 rounded-lg text-xs font-mono shadow-lg backdrop-blur border ${
+                darkMode ? 'bg-zinc-900/80 text-zinc-200 border-zinc-700' : 'bg-white/90 text-slate-700 border-slate-200'
+              }`}>
+                {loadingStatus || `Načítám další body... (${points.length.toLocaleString()})`}
+              </div>
+            </div>
+          )}
 
         <Canvas 
           camera={{ position: [5, 4, 5], fov: 50, near: 0.01, far: 1000 }}
@@ -459,17 +489,17 @@ export default function EmbeddingsVisualizer() {
               >
                 {hoveredPoint.topic_name || `Cluster ${hoveredPoint.cluster}`}
               </span>
-              {hoveredPoint.metadata?.category && (
+              {Boolean(hoveredPoint.metadata?.category) && (
                 <span className={`text-xs px-2 py-0.5 rounded ${darkMode ? 'bg-zinc-700 text-zinc-300' : 'bg-slate-200 text-slate-600'}`}>
-                  {String(hoveredPoint.metadata.category)}
+                  {String(hoveredPoint.metadata?.category)}
                 </span>
               )}
             </div>
             
             {/* Title */}
-            {hoveredPoint.metadata?.title && (
+            {Boolean(hoveredPoint.metadata?.title) && (
               <div className={`font-semibold text-sm mb-2 line-clamp-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                {String(hoveredPoint.metadata.title)}
+                {String(hoveredPoint.metadata?.title)}
               </div>
             )}
             

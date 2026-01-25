@@ -13,16 +13,18 @@ Interactive 3D visualization of embeddings from a ChromaDB database using UMAP d
 ## Architecture
 
 ```
-├── app/                    # Next.js frontend
-│   ├── page.tsx           # Main visualization component
-│   ├── layout.tsx         # App layout
-│   └── globals.css        # Global styles
+├── src/                   # Frontend source
+│   ├── app/               # Next.js App Router
+│   │   ├── page.tsx       # Main visualization component
+│   │   ├── layout.tsx     # App layout
+│   │   └── globals.css    # Global styles
+│   ├── components/        # React components
+│   │   └── ui/            # UI components (Button)
+│   └── lib/               # Utilities
 ├── backend/               # Python API
 │   ├── main.py           # FastAPI server
 │   ├── precompute.py     # UMAP/HDBSCAN processing
 │   └── requirements.txt  # Python dependencies
-├── components/ui/         # UI components (Button)
-└── lib/                   # Utilities
 ```
 
 ## Setup
@@ -45,7 +47,7 @@ pip install -r requirements.txt
 
 ### Pre-compute embeddings
 
-Place your ChromaDB database in `chroma_db_PROTEXT/` and run:
+Place your ChromaDB database in `data/chroma-db/protext/` (recommended) and run:
 
 ```bash
 cd backend
@@ -53,6 +55,12 @@ python precompute.py
 ```
 
 This generates `embeddings_cache.json` with 3D coordinates.
+
+You can also override the database location with:
+
+```bash
+export CHROMA_DB_PATH="/absolute/path/to/your/chroma-db"
+```
 
 ### Start API server
 

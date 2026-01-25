@@ -11,6 +11,9 @@ out/
 .env.local
 .env.*.local
 
+# Cursor / editor rules
+.cursorrules
+
 # Python
 backend/venv/
 backend/__pycache__/
@@ -20,6 +23,7 @@ backend/__pycache__/
 
 # Database (too large for git)
 chroma_db_PROTEXT/
+data/
 
 # Cache files
 backend/embeddings_cache.json

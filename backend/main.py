@@ -4,6 +4,7 @@ Serves pre-computed 3D coordinates from cache file for instant loading.
 """
 
 import json
+import os
 from pathlib import Path
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +23,31 @@ app.add_middleware(
 
 # Cache file path
 CACHE_FILE = Path(__file__).parent / "embeddings_cache.json"
-CHROMA_DB_PATH = Path(__file__).parent.parent / "chroma_db_PROTEXT"
+
+def resolve_chroma_db_path() -> Path:
+    """
+    Resolve ChromaDB path.
+    Priority:
+    1) CHROMA_DB_PATH env var
+    2) new default: <repo>/data/chroma-db/protext
+    3) legacy default: <repo>/chroma_db_PROTEXT
+    """
+    env = os.getenv("CHROMA_DB_PATH")
+    if env:
+        return Path(env).expanduser()
+
+    repo_root = Path(__file__).resolve().parent.parent
+    new_default = repo_root / "data" / "chroma-db" / "protext"
+    legacy_default = repo_root / "chroma_db_PROTEXT"
+
+    if new_default.exists():
+        return new_default
+    if legacy_default.exists():
+        return legacy_default
+    return new_default
+
+
+CHROMA_DB_PATH = resolve_chroma_db_path()
 
 # Load cache on startup
 _cache = None

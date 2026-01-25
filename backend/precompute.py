@@ -7,24 +7,31 @@ import json
 import struct
 import sqlite3
 import pickle
+import sys
+import os
 from pathlib import Path
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
+
+def log(msg):
+    """Print with immediate flush."""
+    print(msg, flush=True)
 
 try:
     from umap import UMAP
     HAS_UMAP = True
 except ImportError:
     HAS_UMAP = False
-    print("UMAP not installed, using PCA")
+    log("UMAP not installed, using PCA")
 
 try:
     import hdbscan
     HAS_HDBSCAN = True
 except ImportError:
     HAS_HDBSCAN = False
-    print("HDBSCAN not installed, skipping clustering")
+    log("HDBSCAN not installed, skipping clustering")
 
 try:
     from bertopic import BERTopic
@@ -33,9 +40,32 @@ try:
     HAS_BERTOPIC = True
 except ImportError:
     HAS_BERTOPIC = False
-    print("BERTopic not installed, skipping topic modeling")
+    log("BERTopic not installed, skipping topic modeling")
 
-CHROMA_DB_PATH = Path(__file__).parent.parent / "chroma_db_PROTEXT"
+def resolve_chroma_db_path() -> Path:
+    """
+    Resolve ChromaDB path.
+    Priority:
+    1) CHROMA_DB_PATH env var
+    2) new default: <repo>/data/chroma-db/protext
+    3) legacy default: <repo>/chroma_db_PROTEXT
+    """
+    env = os.getenv("CHROMA_DB_PATH")
+    if env:
+        return Path(env).expanduser()
+
+    repo_root = Path(__file__).resolve().parent.parent
+    new_default = repo_root / "data" / "chroma-db" / "protext"
+    legacy_default = repo_root / "chroma_db_PROTEXT"
+
+    if new_default.exists():
+        return new_default
+    if legacy_default.exists():
+        return legacy_default
+    return new_default
+
+
+CHROMA_DB_PATH = resolve_chroma_db_path()
 SQLITE_PATH = CHROMA_DB_PATH / "chroma.sqlite3"
 CACHE_FILE = Path(__file__).parent / "embeddings_cache.json"
 
@@ -130,9 +160,7 @@ def read_all_embeddings(dimensions=1024):
     max_pos = file_size // entry_size
     print(f"   File contains {max_pos} vector slots")
     
-    for label in range(1, num_vectors + 1):
-        if label % 100000 == 0:
-            print(f"  Reading label {label}/{num_vectors}...")
+    for label in tqdm(range(1, num_vectors + 1), desc="   Reading embeddings", unit="vec"):
         position = label - 1  # Labels start at 1, positions at 0
         offset = position * entry_size + vector_offset_in_entry
         if offset + dimensions * 4 <= file_size:
@@ -145,26 +173,26 @@ def read_all_embeddings(dimensions=1024):
 
 
 def main():
-    print("=" * 60)
-    print("Pre-computing 3D coordinates for visualization")
-    print("=" * 60)
+    log("=" * 60)
+    log("Pre-computing 3D coordinates for visualization")
+    log("=" * 60)
     
     # Load ID mapping first
-    print("\n1. Loading UUID to HNSW label mapping...")
+    log("\n1. Loading UUID to HNSW label mapping...")
     id_to_label = load_id_mapping()
     
     # Get documents
-    print("\n2. Loading documents from SQLite...")
-    all_docs = get_documents(limit=10000)  # Test with 10k first
+    log("\n2. Loading documents from SQLite...")
+    all_docs = get_documents(limit=500000)  # Full dataset
     print(f"   Loaded {len(all_docs)} documents")
     
     # Read ALL embeddings from binary file
-    print("\n3. Reading ALL embeddings from binary file...")
+    log("\n3. Reading ALL embeddings from binary file...")
     all_embeddings = read_all_embeddings()
     print(f"   Read {len(all_embeddings)} embeddings")
     
     # Match documents to embeddings using UUID mapping
-    print("\n4. Matching documents to embeddings via UUID...")
+    log("\n4. Matching documents to embeddings via UUID...")
     docs = []
     embeddings_list = []
     missing = 0
@@ -193,10 +221,10 @@ def main():
     coords_3d = None
     
     if HAS_BERTOPIC:
-        print("\n5. Running TF-IDF based visualization and clustering...")
-        print("   Using SPARSE vectors (keyword-based) for BOTH:")
-        print("   - 3D positions (topics will be spatially grouped)")
-        print("   - Cluster assignments (by shared keywords)")
+        log("\n5. Running TF-IDF based visualization and clustering...")
+        log("   Using SPARSE vectors (keyword-based) for BOTH:")
+        log("   - 3D positions (topics will be spatially grouped)")
+        log("   - Cluster assignments (by shared keywords)")
         
         # Get document texts
         doc_texts = [doc["text"] for doc in docs]
@@ -214,7 +242,7 @@ def main():
             max_features=5000  # Limit vocabulary for speed
         )
         
-        print("   Creating TF-IDF matrix...")
+        log("   Creating TF-IDF matrix...")
         tfidf_matrix = tfidf_vectorizer.fit_transform(doc_texts)
         print(f"   TF-IDF matrix: {tfidf_matrix.shape}")
         
@@ -222,12 +250,15 @@ def main():
         tfidf_dense = tfidf_matrix.toarray()
         
         # UMAP to 3D for visualization (on TF-IDF, not dense embeddings!)
-        print("\n6. Reducing TF-IDF to 3D for visualization...")
+        log("\n6. Reducing TF-IDF to 3D for visualization...")
+        sys.stdout.flush()
         umap_3d = UMAP(
             n_components=3,
             n_neighbors=15,
             min_dist=0.1,
             spread=1.0,
+            n_jobs=-1,  # Use all CPU cores
+            low_memory=True,
             metric='cosine',
             random_state=42,
             verbose=True
@@ -235,19 +266,22 @@ def main():
         coords_3d = umap_3d.fit_transform(tfidf_dense)
         
         # Scale coordinates
-        print("\n7. Scaling coordinates...")
+        log("\n7. Scaling coordinates...")
         coords_3d = coords_3d - coords_3d.mean(axis=0)
         max_dist = np.max(np.linalg.norm(coords_3d, axis=1))
         if max_dist > 0:
             coords_3d = coords_3d * (3.0 / max_dist)
         
         # UMAP to 5D for clustering
-        print("\n8. Reducing TF-IDF to 5D for clustering...")
+        log("\n8. Reducing TF-IDF to 5D for clustering...")
+        sys.stdout.flush()
         umap_5d = UMAP(
             n_components=5,
             n_neighbors=15,
             min_dist=0.0,
             metric='cosine',
+            n_jobs=-1,
+            low_memory=True,
             random_state=42,
             verbose=False
         )
@@ -287,7 +321,7 @@ def main():
             'nový', 'nová', 'nové', 'velký', 'velká', 'malý', 'malá', 'dobrý', 'dobrá',
             'každý', 'každá', 'další', 'jiný', 'jiná', 'stejný', 'stejná', 'různý', 'různá',
             # Even more generic
-            'kontakt', 'spolu', 'české', 'český', 'česká', 'roce', 'roku', 'let',
+            'kontakt', 'spolu', 'roce', 'roku', 'let',
             'bez', 'počet', 'chtěli', 'chtěl', 'naším', 'naše', 'náš', 'meziroční',
             'dětí', 'petra', 'petr', 'chtěla', 'mohli', 'měli', 'říká', 'uvádí',
         ]
@@ -318,6 +352,8 @@ def main():
             n_neighbors=15,
             min_dist=0.0,
             metric='cosine',
+            n_jobs=-1,
+            low_memory=True,
             random_state=42
         )
         
@@ -362,7 +398,7 @@ def main():
             print(f"   ... and {len(topic_info) - 10} more topics")
             
     elif HAS_HDBSCAN:
-        print("\n8. Computing HDBSCAN clusters for coloring (no BERTopic)...")
+        log("\n8. Computing HDBSCAN clusters for coloring (no BERTopic)...")
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=100,
             min_samples=5,
@@ -374,7 +410,7 @@ def main():
         print(f"   Found {n_clusters} clusters")
     
     # Build cache
-    print("\n9. Building cache...")
+    log("\n9. Building cache...")
     cache = {
         "count": actual_count,
         "dimensions": 1024,
@@ -384,9 +420,7 @@ def main():
         "points": []
     }
     
-    for i in range(actual_count):
-        if i % 50000 == 0:
-            print(f"   Processing {i}/{actual_count}...")
+    for i in tqdm(range(actual_count), desc="   Building cache", unit="doc"):
         doc = docs[i]
         topic_id = int(cluster_labels[i])
         topic_name = topic_info.get(topic_id, {}).get("name", f"Topic {topic_id}")
@@ -407,12 +441,12 @@ def main():
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
     
-    print("\n" + "=" * 60)
+    log("\n" + "=" * 60)
     print(f"Done! Cache saved with {len(cache['points'])} points")
     print(f"File size: {CACHE_FILE.stat().st_size / 1024 / 1024:.2f} MB")
     if HAS_HDBSCAN:
         print(f"Clusters found: {n_clusters}")
-    print("=" * 60)
+    log("=" * 60)
 
 
 if __name__ == "__main__":
