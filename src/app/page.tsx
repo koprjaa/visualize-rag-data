@@ -8,7 +8,11 @@ import * as THREE from "three"
 import { Button } from "@/components/ui/button"
 import { Sun, Moon, ChevronDown, ChevronUp } from "lucide-react"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+// V prohlížeči používáme stejný host jako stránka (localhost / 127.0.0.1), jinak env nebo localhost:8000
+function getApiBase(): string {
+  if (typeof window !== "undefined") return `http://${window.location.hostname}:8000`
+  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+}
 
 type EmbeddingPoint = {
   id: string
@@ -264,7 +268,7 @@ export default function EmbeddingsVisualizer() {
 
   const loadCollectionInfo = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/info`)
+      const response = await fetch(`${getApiBase()}/api/info`)
       if (!response.ok) throw new Error("Failed to load collection info")
       const info = await response.json()
       setCollectionInfo(info)
@@ -294,7 +298,7 @@ export default function EmbeddingsVisualizer() {
         const batchLimit = Math.min(BATCH_SIZE, total - offset)
         setLoadingStatus(`Načítám ${loaded.toLocaleString()} / ${total.toLocaleString()} bodů...`)
 
-        const response = await fetch(`${API_URL}/api/embeddings?limit=${batchLimit}&offset=${offset}`)
+        const response = await fetch(`${getApiBase()}/api/embeddings?limit=${batchLimit}&offset=${offset}`)
         if (!response.ok) throw new Error("Failed to load data")
         const batch = await response.json()
 

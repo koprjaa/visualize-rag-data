@@ -55,11 +55,11 @@
     "gpt-tokenizer": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "16.0.0",
+    "next": "16.1.5",
     "next-themes": "latest",
-    "react": "19.2.0",
+    "react": "19.2.1",
     "react-day-picker": "9.8.0",
-    "react-dom": "19.2.0",
+    "react-dom": "19.2.1",
     "react-hook-form": "^7.60.0",
     "react-native": "latest",
     "react-native-reanimated": "latest",
@@ -73,6 +73,9 @@
     "three": "latest",
     "vaul": "^0.9.9",
     "zod": "3.25.76"
+  },
+  "overrides": {
+    "tar": "7.5.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
