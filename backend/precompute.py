@@ -139,7 +139,6 @@ def read_all_embeddings(dimensions=1024):
     with open(header_file, "rb") as f:
         header = f.read()
     
-    import struct
     num_vectors = struct.unpack('<I', header[20:24])[0]
     # NOTE: entry_size is at offset 28, NOT 36!
     entry_size = struct.unpack('<I', header[28:32])[0]
@@ -170,6 +169,35 @@ def read_all_embeddings(dimensions=1024):
             ).copy()
     
     return embeddings
+
+
+def reduce_embeddings_to_3d(embeddings: np.ndarray) -> np.ndarray:
+    """Compute 3D coordinates from dense embeddings with UMAP/PCA fallback."""
+    if HAS_UMAP:
+        log("\n5. Reducing dense embeddings to 3D with UMAP...")
+        reducer = UMAP(
+            n_components=3,
+            n_neighbors=15,
+            min_dist=0.1,
+            spread=1.0,
+            metric="cosine",
+            n_jobs=-1,
+            low_memory=True,
+            random_state=42,
+            verbose=True,
+        )
+        coords = reducer.fit_transform(embeddings)
+    else:
+        log("\n5. UMAP unavailable, reducing dense embeddings to 3D with PCA...")
+        scaler = StandardScaler(with_mean=True, with_std=True)
+        scaled = scaler.fit_transform(embeddings)
+        coords = PCA(n_components=3, random_state=42).fit_transform(scaled)
+
+    coords = coords - coords.mean(axis=0)
+    max_dist = np.max(np.linalg.norm(coords, axis=1))
+    if max_dist > 0:
+        coords = coords * (3.0 / max_dist)
+    return coords
 
 
 def main():
@@ -213,15 +241,30 @@ def main():
     
     embeddings = np.array(embeddings_list, dtype=np.float32)
     actual_count = len(docs)
+
+    if actual_count == 0:
+        log("\nNo matched documents found. Writing empty cache.")
+        cache = {
+            "count": 0,
+            "dimensions": 1024,
+            "model": "BAAI/bge-m3",
+            "method": "none",
+            "topics": {},
+            "points": [],
+        }
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+        log(f"Empty cache written to {CACHE_FILE}")
+        return
     
     # We'll use TF-IDF for BOTH visualization AND clustering
     # This ensures documents with same topic are close in 3D space
     cluster_labels = np.zeros(actual_count, dtype=int)
     topic_info = {}  # topic_id -> {name, keywords}
-    coords_3d = None
+    coords_3d = reduce_embeddings_to_3d(embeddings)
     
     if HAS_BERTOPIC:
-        log("\n5. Running TF-IDF based visualization and clustering...")
+        log("\n6. Running TF-IDF based visualization and clustering...")
         log("   Using SPARSE vectors (keyword-based) for BOTH:")
         log("   - 3D positions (topics will be spatially grouped)")
         log("   - Cluster assignments (by shared keywords)")
@@ -250,7 +293,7 @@ def main():
         tfidf_dense = tfidf_matrix.toarray()
         
         # UMAP to 3D for visualization (on TF-IDF, not dense embeddings!)
-        log("\n6. Reducing TF-IDF to 3D for visualization...")
+        log("\n7. Reducing TF-IDF to 3D for visualization...")
         sys.stdout.flush()
         umap_3d = UMAP(
             n_components=3,
@@ -266,14 +309,14 @@ def main():
         coords_3d = umap_3d.fit_transform(tfidf_dense)
         
         # Scale coordinates
-        log("\n7. Scaling coordinates...")
+        log("\n8. Scaling coordinates...")
         coords_3d = coords_3d - coords_3d.mean(axis=0)
         max_dist = np.max(np.linalg.norm(coords_3d, axis=1))
         if max_dist > 0:
             coords_3d = coords_3d * (3.0 / max_dist)
         
         # UMAP to 5D for clustering
-        log("\n8. Reducing TF-IDF to 5D for clustering...")
+        log("\n9. Reducing TF-IDF to 5D for clustering...")
         sys.stdout.flush()
         umap_5d = UMAP(
             n_components=5,
@@ -398,7 +441,7 @@ def main():
             print(f"   ... and {len(topic_info) - 10} more topics")
             
     elif HAS_HDBSCAN:
-        log("\n8. Computing HDBSCAN clusters for coloring (no BERTopic)...")
+        log("\n6. Computing HDBSCAN clusters for coloring (no BERTopic)...")
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=100,
             min_samples=5,

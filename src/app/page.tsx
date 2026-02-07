@@ -8,10 +8,11 @@ import * as THREE from "three"
 import { Button } from "@/components/ui/button"
 import { Sun, Moon, ChevronDown, ChevronUp } from "lucide-react"
 
-// V prohlížeči používáme stejný host jako stránka (localhost / 127.0.0.1), jinak env nebo localhost:8000
+// Prefer explicit env URL. Otherwise mirror current protocol/host and use backend port.
 function getApiBase(): string {
-  if (typeof window !== "undefined") return `http://${window.location.hostname}:8000`
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  if (typeof window !== "undefined") return `${window.location.protocol}//${window.location.hostname}:8000`
+  return "http://localhost:8000"
 }
 
 type EmbeddingPoint = {
