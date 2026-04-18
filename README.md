@@ -19,7 +19,7 @@ Built originally to debug the embeddings in [protext-scraper](https://github.com
 ## How it's split
 
 ```
-├── src/                      # Next.js 15 frontend (App Router)
+├── src/                      # Next.js 16 frontend (App Router)
 │   ├── app/
 │   │   ├── page.tsx          # Three.js scene + hover/tooltip
 │   │   ├── layout.tsx
