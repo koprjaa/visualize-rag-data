@@ -2,13 +2,9 @@
 
 **Fly around your ChromaDB vector store in 3D — UMAP + HDBSCAN in the backend, Three.js in the browser, instant load from pre-computed coordinates.**
 
-![nextjs](https://img.shields.io/badge/Next.js-15-000?style=flat-square&logo=nextdotjs&logoColor=white)
-![typescript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![nextjs](https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=nextdotjs&logoColor=white)
 ![threejs](https://img.shields.io/badge/Three.js-r3f-000?style=flat-square&logo=threedotjs&logoColor=white)
-![tailwind](https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![fastapi](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat-square&logo=fastapi&logoColor=white)
-![umap](https://img.shields.io/badge/UMAP--learn-dim%20reduction-4A154B?style=flat-square)
-![hdbscan](https://img.shields.io/badge/HDBSCAN-clustering-222?style=flat-square)
+![python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![license](https://img.shields.io/badge/license-MIT-A31F34?style=flat-square)
 ![ci](https://github.com/koprjaa/chromadb-embedding-visualizer/actions/workflows/ci.yml/badge.svg)
 
