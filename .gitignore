@@ -37,6 +37,7 @@ backend/embeddings_cache.json
 # Editor / tooling
 .cursorrules
 .trunk/
+docs/superpowers/
 
 # Build
 dist/
