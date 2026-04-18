@@ -12,7 +12,7 @@
 ![license](https://img.shields.io/badge/license-MIT-A31F34?style=flat-square)
 ![ci](https://github.com/koprjaa/chromadb-embedding-visualizer/actions/workflows/ci.yml/badge.svg)
 
-<video src="https://raw.githubusercontent.com/koprjaa/chromadb-embedding-visualizer/main/public/demo.mp4" controls muted autoplay loop playsinline></video>
+<!-- TODO: drag-drop demo video here via GitHub web editor -->
 
 If you've ever squinted at a `t-SNE` PNG to understand whether your RAG embeddings actually cluster the way you want them to, this is the nicer version of that. Load a ChromaDB database, run UMAP down to 3D + HDBSCAN for cluster labels, serve the result as cached JSON, render it as a spinning point cloud with hover-to-inspect-doc tooltips.
 
