@@ -34,6 +34,10 @@ backend/embeddings_cache.json
 *.swp
 *.swo
 
+# Editor / tooling
+.cursorrules
+.trunk/
+
 # Build
 dist/
 build/
