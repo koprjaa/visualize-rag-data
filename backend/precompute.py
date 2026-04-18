@@ -35,7 +35,6 @@ except ImportError:
 
 try:
     from bertopic import BERTopic
-    from bertopic.representation import KeyBERTInspired
     from sklearn.feature_extraction.text import CountVectorizer
     HAS_BERTOPIC = True
 except ImportError:
@@ -314,22 +313,7 @@ def main():
         max_dist = np.max(np.linalg.norm(coords_3d, axis=1))
         if max_dist > 0:
             coords_3d = coords_3d * (3.0 / max_dist)
-        
-        # UMAP to 5D for clustering
-        log("\n9. Reducing TF-IDF to 5D for clustering...")
-        sys.stdout.flush()
-        umap_5d = UMAP(
-            n_components=5,
-            n_neighbors=15,
-            min_dist=0.0,
-            metric='cosine',
-            n_jobs=-1,
-            low_memory=True,
-            random_state=42,
-            verbose=False
-        )
-        tfidf_reduced = umap_5d.fit_transform(tfidf_dense)
-        
+
         # Czech stopwords - common generic words to exclude from topic names
         czech_stopwords = [
             # Pronouns & articles
@@ -434,7 +418,7 @@ def main():
                     name = keywords[0].title() if keywords else f"Topic {topic_id}"
                     topic_info[topic_id] = {"name": name, "keywords": keywords}
         
-        print(f"\n   Topic summary:")
+        print("\n   Topic summary:")
         for tid, info in sorted(topic_info.items())[:10]:
             print(f"   Topic {tid}: {info['name']}")
         if len(topic_info) > 10:
