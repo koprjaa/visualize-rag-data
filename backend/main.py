@@ -10,14 +10,30 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="ChromaDB Visualizer API")
+# Environment / deployment config
+APP_ENV = os.getenv("APP_ENV", "production").lower()
+_IS_DEV = APP_ENV in ("dev", "development", "local")
 
-# CORS for Next.js frontend
+# Disable interactive docs outside of dev to reduce surface area.
+app = FastAPI(
+    title="ChromaDB Visualizer API",
+    docs_url="/docs" if _IS_DEV else None,
+    redoc_url="/redoc" if _IS_DEV else None,
+    openapi_url="/openapi.json" if _IS_DEV else None,
+)
+
+# CORS for Next.js frontend.
+# Restrict to known origin(s); override via CORS_ORIGINS (comma-separated).
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -176,4 +192,6 @@ if __name__ == "__main__":
     # Pre-load cache
     load_cache()
     print(f"Cache loaded with {len(_cache.get('points', []))} points")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
