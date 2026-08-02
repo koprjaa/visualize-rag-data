@@ -55,7 +55,7 @@
     "gpt-tokenizer": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "^16.2.6",
+    "next": "^16.2.12",
     "next-themes": "latest",
     "react": "19.2.1",
     "react-day-picker": "9.8.0",
