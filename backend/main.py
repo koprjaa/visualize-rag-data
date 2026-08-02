@@ -6,6 +6,7 @@ Serves pre-computed 3D coordinates from cache file for instant loading.
 import json
 import os
 from pathlib import Path
+
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -107,7 +108,7 @@ class CollectionInfo(BaseModel):
 
 
 @app.get("/api/info")
-async def get_info() -> CollectionInfo:
+def get_info() -> CollectionInfo:
     """Get information about the ChromaDB collection."""
     cache = load_cache()
     

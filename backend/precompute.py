@@ -4,16 +4,18 @@ Based on research: https://umap-learn.readthedocs.io/en/latest/parameters.html
 """
 
 import json
-import struct
-import sqlite3
-import pickle
-import sys
 import os
+import pickle
+import sqlite3
+import struct
+import sys
 from pathlib import Path
+
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+
 
 def log(msg):
     """Print with immediate flush."""
@@ -106,7 +108,7 @@ def load_id_mapping():
                          if d.is_dir() and (d / "index_metadata.pickle").exists()]
     
     if not collection_folders:
-        raise Exception("No index_metadata.pickle found")
+        raise FileNotFoundError("No index_metadata.pickle found")
     
     pickle_file = collection_folders[0] / "index_metadata.pickle"
     print(f"Loading ID mapping from {pickle_file}...")
@@ -127,7 +129,7 @@ def read_all_embeddings(dimensions=1024):
                          if d.is_dir() and (d / "data_level0.bin").exists()]
     
     if not collection_folders:
-        raise Exception("No HNSW index found")
+        raise FileNotFoundError("No HNSW index found")
     
     data_file = collection_folders[0] / "data_level0.bin"
     header_file = collection_folders[0] / "header.bin"
