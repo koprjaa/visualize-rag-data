@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
-dependencies = ["numpy>=1.26", "scikit-learn>=1.4"]
+dependencies = ["numpy>=1.26", "scikit-learn>=1.5.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff==0.16.1"]
