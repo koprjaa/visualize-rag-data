@@ -74,11 +74,24 @@ UMAP keeps both local and global structure better than t-SNE, so points that are
 
 The frontend loads the cached coordinates once and then runs client side. There is no request per hover and no recomputation per session. The scene supports orbit controls and a dark and light theme.
 
+## Development
+
+```bash
+uv run --extra dev ruff check .
+uv run --extra dev pytest -q
+```
+
+The backend suite builds an HNSW index byte by byte, so it needs no ChromaDB
+database. It covers the header offsets, the label to position mapping, and the
+coordinate scaling. CI runs ruff and pytest on Python 3.11 and 3.12, on Linux
+and Windows, next to the frontend lint and typecheck.
+
 ## Limits
 
 - The view is a snapshot, not a live query. Run `precompute.py` again after the collection changes.
 - UMAP holds the full embedding matrix in memory during ingest.
 - One collection at a time. An overlay of several collections needs a change in `precompute.py`.
+- The HNSW header layout is undocumented. The byte offsets in `backend/chroma_io.py` were read off a real index and a ChromaDB upgrade could move them.
 
 ## License
 
