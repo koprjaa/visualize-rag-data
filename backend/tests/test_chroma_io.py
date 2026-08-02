@@ -1,3 +1,17 @@
+#
+# Project: chromadb-embedding-visualizer
+# File:    test_chroma_io.py
+#
+# Description:
+# Tests for reading a ChromaDB folder and its HNSW index.
+#
+# Author:
+# Jan Alexandr Kopřiva
+# jan.alexandr.kopriva@gmail.com
+#
+# License: MIT
+#
+
 """Tests for reading a ChromaDB folder and its HNSW index.
 
 The index files are built here byte by byte, so no real database is needed. The

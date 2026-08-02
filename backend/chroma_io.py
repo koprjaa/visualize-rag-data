@@ -1,3 +1,17 @@
+#
+# Project: chromadb-embedding-visualizer
+# File:    chroma_io.py
+#
+# Description:
+# Reads a ChromaDB folder from disk: finds the collection and parses the vectors out of the HNSW index.
+#
+# Author:
+# Jan Alexandr Kopřiva
+# jan.alexandr.kopriva@gmail.com
+#
+# License: MIT
+#
+
 """Reading a ChromaDB folder from disk.
 
 Shared by precompute.py and main.py, which both need to find the database, and

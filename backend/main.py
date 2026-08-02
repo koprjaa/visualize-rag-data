@@ -1,3 +1,17 @@
+#
+# Project: chromadb-embedding-visualizer
+# File:    main.py
+#
+# Description:
+# FastAPI backend that serves the precomputed coordinates and the collection metadata to the viewer.
+#
+# Author:
+# Jan Alexandr Kopřiva
+# jan.alexandr.kopriva@gmail.com
+#
+# License: MIT
+#
+
 """
 FastAPI backend for ChromaDB visualization.
 Serves pre-computed 3D coordinates from cache file for instant loading.

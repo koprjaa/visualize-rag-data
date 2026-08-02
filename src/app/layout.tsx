@@ -1,3 +1,17 @@
+/**
+ * Project: chromadb-embedding-visualizer
+ * File:    layout.tsx
+ *
+ * Description:
+ * Root layout: fonts, page metadata, and the shell every page renders into.
+ *
+ * Author:
+ * Jan Alexandr Kopřiva
+ * jan.alexandr.kopriva@gmail.com
+ *
+ * License: MIT
+ */
+
 import type React from "react"
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"

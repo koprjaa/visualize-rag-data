@@ -1,3 +1,17 @@
+#
+# Project: chromadb-embedding-visualizer
+# File:    precompute.py
+#
+# Description:
+# Reduces the stored embeddings to three dimensions with UMAP and caches the result.
+#
+# Author:
+# Jan Alexandr Kopřiva
+# jan.alexandr.kopriva@gmail.com
+#
+# License: MIT
+#
+
 """
 Pre-compute 3D coordinates from embeddings using UMAP with optimized parameters.
 Based on research: https://umap-learn.readthedocs.io/en/latest/parameters.html
