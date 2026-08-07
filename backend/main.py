@@ -1,3 +1,17 @@
+#
+# Project: chromadb-embedding-visualizer
+# File:    main.py
+#
+# Description:
+# FastAPI backend that serves the precomputed coordinates and the collection metadata to the viewer.
+#
+# Author:
+# Jan Alexandr Kopřiva
+# jan.alexandr.kopriva@gmail.com
+#
+# License: MIT
+#
+
 """
 FastAPI backend for ChromaDB visualization.
 Serves pre-computed 3D coordinates from cache file for instant loading.
@@ -6,6 +20,8 @@ Serves pre-computed 3D coordinates from cache file for instant loading.
 import json
 import os
 from pathlib import Path
+
+from chroma_io import resolve_chroma_db_path
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -40,29 +56,6 @@ app.add_middleware(
 # Cache file path
 CACHE_FILE = Path(__file__).parent / "embeddings_cache.json"
 
-def resolve_chroma_db_path() -> Path:
-    """
-    Resolve ChromaDB path.
-    Priority:
-    1) CHROMA_DB_PATH env var
-    2) new default: <repo>/data/chroma-db/protext
-    3) legacy default: <repo>/chroma_db_PROTEXT
-    """
-    env = os.getenv("CHROMA_DB_PATH")
-    if env:
-        return Path(env).expanduser()
-
-    repo_root = Path(__file__).resolve().parent.parent
-    new_default = repo_root / "data" / "chroma-db" / "protext"
-    legacy_default = repo_root / "chroma_db_PROTEXT"
-
-    if new_default.exists():
-        return new_default
-    if legacy_default.exists():
-        return legacy_default
-    return new_default
-
-
 CHROMA_DB_PATH = resolve_chroma_db_path()
 
 # Load cache on startup
@@ -73,7 +66,7 @@ def load_cache():
     global _cache
     if _cache is None:
         if CACHE_FILE.exists():
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            with CACHE_FILE.open(encoding="utf-8") as f:
                 _cache = json.load(f)
         else:
             _cache = {"count": 0, "points": [], "model": "unknown", "dimensions": 0}
@@ -107,31 +100,31 @@ class CollectionInfo(BaseModel):
 
 
 @app.get("/api/info")
-async def get_info() -> CollectionInfo:
+def get_info() -> CollectionInfo:
     """Get information about the ChromaDB collection."""
     cache = load_cache()
-    
+
     # Also read from meta file for total count
     meta_path = CHROMA_DB_PATH / "embedding_meta.json"
     model = cache.get("model", "unknown")
     dimensions = cache.get("dimensions", 1024)
-    
+
     if meta_path.exists():
-        with open(meta_path) as f:
+        with meta_path.open(encoding="utf-8") as f:
             meta = json.load(f)
             model = meta.get("model_name", model)
             dimensions = meta.get("dimensions", dimensions)
-    
+
     # Build topics list with counts
     topics_raw = cache.get("topics", {})
     points = cache.get("points", [])
-    
+
     # Count documents per topic
     topic_counts = {}
     for p in points:
         tid = p.get("cluster", 0)
         topic_counts[tid] = topic_counts.get(tid, 0) + 1
-    
+
     topics = []
     for tid_str, info in topics_raw.items():
         tid = int(tid_str)
@@ -141,10 +134,10 @@ async def get_info() -> CollectionInfo:
             keywords=info.get("keywords", []),
             count=topic_counts.get(tid, 0)
         ))
-    
+
     # Sort by count descending, but put -1 (outliers) last
     topics.sort(key=lambda t: (t.id == -1, -t.count))
-    
+
     return CollectionInfo(
         name="langchain",
         count=len(points),
@@ -165,10 +158,10 @@ async def get_embeddings(
     """
     cache = load_cache()
     points = cache.get("points", [])
-    
+
     # Slice based on limit and offset
     selected = points[offset:offset + limit]
-    
+
     return [
         EmbeddingPoint(
             id=p["id"],

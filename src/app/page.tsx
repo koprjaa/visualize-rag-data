@@ -1,3 +1,17 @@
+/**
+ * Project: chromadb-embedding-visualizer
+ * File:    page.tsx
+ *
+ * Description:
+ * The viewer page: draws the embedding cloud with three.js and handles the camera, search, and selection.
+ *
+ * Author:
+ * Jan Alexandr Kopřiva
+ * jan.alexandr.kopriva@gmail.com
+ *
+ * License: MIT
+ */
+
 "use client"
 
 import type React from "react"
